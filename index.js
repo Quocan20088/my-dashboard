@@ -7,26 +7,27 @@ app.get('/', (req, res) => {
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Cờ Vua với Bot</title>
+            <title>Cờ Vua với Bot Thông Minh</title>
             <meta charset="UTF-8">
             <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
             <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
             <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
             <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
             <style>
-                body { background-color: #222; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding-top: 20px; }
-                #myBoard { width: 400px; margin-bottom: 20px; }
-                .info { background: #333; padding: 15px; border-radius: 10px; text-align: center; width: 370px; }
-                button { background: #4facfe; border: none; padding: 10px 20px; color: white; border-radius: 5px; cursor: pointer; font-weight: bold; }
-                button:hover { background: #00f2fe; }
+                body { background-color: #1a1a1a; color: white; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+                #myBoard { width: 450px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+                .info-panel { background: #2a2a2a; padding: 20px; border-radius: 12px; margin-top: 20px; width: 410px; text-align: center; border: 1px solid #444; }
+                .status-text { font-size: 18px; margin-bottom: 15px; color: #4facfe; font-weight: bold; }
+                button { background: #e74c3c; border: none; padding: 10px 25px; color: white; border-radius: 6px; cursor: pointer; font-size: 16px; transition: 0.3s; }
+                button:hover { background: #c0392b; transform: scale(1.05); }
             </style>
         </head>
         <body>
-            <h2>TRẬN ĐẤU VỚI BOT</h2>
+            <h2 style="letter-spacing: 2px;">CHESS AI v1.0</h2>
             <div id="myBoard"></div>
-            <div class="info">
-                <p id="status">Đến lượt bạn (Trắng)</p>
-                <button onclick="resetGame()">Chơi lại</button>
+            <div class="info-panel">
+                <div id="status" class="status-text">Đến lượt bạn (Trắng)</div>
+                <button onclick="resetGame()">LÀM MỚI TRẬN ĐẤU</button>
             </div>
 
             <script>
@@ -34,11 +35,42 @@ app.get('/', (req, res) => {
                 var game = new Chess();
                 var $status = $('#status');
 
-                function makeRandomMove() {
+                // Hàm tính điểm quân cờ để Bot biết cái nào quan trọng
+                function getPieceValue(piece) {
+                    if (piece === null) return 0;
+                    var values = { p: 10, n: 30, b: 30, r: 50, q: 90, k: 900 };
+                    return values[piece.type];
+                }
+
+                // Bot quét tất cả nước đi và chọn nước có lợi nhất
+                function makeBestMove() {
                     var possibleMoves = game.moves();
                     if (game.game_over()) return;
-                    var randomIdx = Math.floor(Math.random() * possibleMoves.length);
-                    game.move(possibleMoves[randomIdx]);
+
+                    var bestMove = null;
+                    var bestValue = -9999;
+
+                    for (var i = 0; i < possibleMoves.length; i++) {
+                        game.move(possibleMoves[i]);
+                        
+                        // Tính toán giá trị bàn cờ sau khi đi thử
+                        var boardValue = 0;
+                        game.board().forEach(row => {
+                            row.forEach(piece => {
+                                if (piece) {
+                                    boardValue += (piece.color === 'b' ? getPieceValue(piece) : -getPieceValue(piece));
+                                }
+                            });
+                        });
+
+                        if (boardValue > bestValue) {
+                            bestValue = boardValue;
+                            bestMove = possibleMoves[i];
+                        }
+                        game.undo();
+                    }
+
+                    game.move(bestMove || possibleMoves[Math.floor(Math.random() * possibleMoves.length)]);
                     board.position(game.fen());
                     updateStatus();
                 }
@@ -46,18 +78,21 @@ app.get('/', (req, res) => {
                 function onDrop(source, target) {
                     var move = game.move({ from: source, to: target, promotion: 'q' });
                     if (move === null) return 'snapback';
+                    
+                    $status.html("Bot đang suy nghĩ...");
+                    window.setTimeout(makeBestMove, 500);
                     updateStatus();
-                    window.setTimeout(makeRandomMove, 250);
                 }
 
                 function updateStatus() {
                     var status = '';
-                    var moveColor = (game.turn() === 'b') ? 'Đen (Bot)' : 'Trắng (Bạn)';
-                    if (game.in_checkmate()) { status = 'Trò chơi kết thúc, ' + moveColor + ' bị chiếu bí.'; }
-                    else if (game.in_draw()) { status = 'Trò chơi kết thúc, hòa.'; }
+                    var moveColor = (game.turn() === 'b') ? 'Bot (Đen)' : 'Bạn (Trắng)';
+
+                    if (game.in_checkmate()) { status = 'CHIẾU BÍ! ' + moveColor + ' thua.'; }
+                    else if (game.in_draw()) { status = 'HÒA CỜ!'; }
                     else {
                         status = 'Lượt đi: ' + moveColor;
-                        if (game.in_check()) { status += ' (Đang bị chiếu!)'; }
+                        if (game.in_check()) { status += ' (ĐANG BỊ CHIẾU!)'; }
                     }
                     $status.html(status);
                 }
@@ -68,8 +103,11 @@ app.get('/', (req, res) => {
                     updateStatus();
                 }
 
-                var config = { draggable: true, position: 'start', onDrop: onDrop };
-                board = ChessBoard('myBoard', config);
+                board = ChessBoard('myBoard', {
+                    draggable: true,
+                    position: 'start',
+                    onDrop: onDrop
+                });
                 updateStatus();
             </script>
         </body>
@@ -78,5 +116,5 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log('Web Cờ Vua đang chạy trên port ' + PORT);
+    console.log('Bot Cờ Vua Thông Minh đang chạy tại port ' + PORT);
 });
